@@ -19,6 +19,7 @@ using P = pair<int, int>;
 using PP = pair<P, int>;
 using VI = vector<int>;
 using VVI = vector<VI>;
+using VVVI = vector<VVI>;
 
 
 struct PLAYER_NAME : public Player {
@@ -62,7 +63,38 @@ struct PLAYER_NAME : public Player {
         }
     }
 
-    void nearest_optimal_cell(int x, int y) {
+    void optimal_cell(int x, int y) {
+	cerr << " so " << x << ' ' << y << " goes to: ";
+	VVI dist(board_rows(), VI(board_cols(), -1));
+	dist[x][y] = 0;
+	queue<PP> Q;
+	Q.push(PP(P(x, y), -1));
+	int Dir;
+	while (not Q.empty() and dist[Q.front().F.F][Q.front().F.S] < 10) {
+	    int i = Q.front().F.F;
+	    int j = Q.front().F.S;
+	    int dir = Q.front().S;
+	    Q.pop();
+	    VI rand = random_permutation(4);
+	    if (dir != -1 and cell(i, j).owner != me()) cerr << "dir " << dirs[dir] << endl;
+	    for (int d = 0; d < 4; ++d) {
+		int ni = i + idir[rand[d]];
+		int nj = j + jdir[rand[d]];
+		if (pos_ok(ni, nj) and cell(ni, nj).type != Waste and dist[ni][nj] == -1) {
+		    dist[ni][nj] = 1 + dist[i][j];
+		    Q.push(PP(P(ni, nj), rand[d]));
+		}
+	    }
+	}
+	cerr << string(50, '-') << endl;
+	for (int i = 0; i < 60; ++i) {
+	    for (int x : dist[i]) cerr << setw(3) << x;
+	    cerr << endl;
+	}
+	cerr << string(50, '-') << endl;
+    }
+
+    void nearest_cell(int x, int y) {
         cerr << "unit at: " << x << ' ' << y << "   ";
 
         VI rand = random_permutation(4);
@@ -75,8 +107,10 @@ struct PLAYER_NAME : public Player {
                 return;
             }
         }
-        cerr << "unluigi" << endl;
+	cerr << "unluigi ";
+	optimal_cell(x, y);
     }
+
 
     /**
      * Play method, invoked once per each round.
@@ -132,7 +166,7 @@ struct PLAYER_NAME : public Player {
         for (int id : Alive) {
             int i = unit(id).pos.i;
             int j = unit(id).pos.j;
-            nearest_optimal_cell(i, j);
+            nearest_cell(i, j);
         }
     }
 };
