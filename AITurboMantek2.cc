@@ -1,5 +1,8 @@
 #include "Player.hh"
-
+/* 
+ * Falta acabar de poner lo de matar siempre al zombie incluso si estas al lado de una unidad muerta
+ * Falta añadir que huya de los que se estan conviertiendo
+*/
 
 /**
  * Write the name of your player and save this file
@@ -56,7 +59,16 @@ struct PLAYER_NAME : public Player {
         for (int d = 0; d < 8; ++d) {
             int ni = i + idird[d];
             int nj = j + jdird[d];
-            if (cell(ni, nj).id != -1 and unit(cell(ni, nj).id).type == Zombie) return true;
+            if (pos_ok(ni, nj) and cell(ni, nj).id != -1 and unit(cell(ni, nj).id).type == Zombie) return true;
+        }
+        return false;
+    }
+
+    bool adjacent_to_anyone(int i, int j) {
+        for (int d = 0; d < 8; ++d) {
+            int ni = i + idird[d];
+            int nj = j + jdird[d];
+            if (pos_ok(ni, nj) and cell(ni, nj).id != -1 and not is_dead(ni, nj) and not is_ally(ni, nj)) return true;
         }
         return false;
     }
@@ -65,7 +77,7 @@ struct PLAYER_NAME : public Player {
         for (int d = 0; d < 8; ++d) {
             int ni = i + idird[d];
             int nj = j + jdird[d];
-            if (cell(ni, nj).id != -1 and unit(cell(ni, nj).id).type == Dead) return true;
+            if (pos_ok(ni, nj) and cell(ni, nj).id != -1 and unit(cell(ni, nj).id).type == Dead) return true;
         }
         return false;
     }
@@ -243,6 +255,7 @@ struct PLAYER_NAME : public Player {
         queue<P> Zombies, Food, Enemies;
         VVI dist(board_rows(), VI(board_cols(), -1));
         dia_dist = VVI(board_rows(), VI(board_cols(), -1));
+	bool passive = true;
         for (int i = 0; i < board_rows(); ++i)
             for (int j = 0; j < board_cols(); ++j)
                 if (cell(i, j).food) {
@@ -255,51 +268,71 @@ struct PLAYER_NAME : public Player {
                     Zombies.push(P(i, j));
                 }
                 else if (cell(i, j).id != -1 and unit(cell(i, j).id).player != me()) {
-                    int id = -1;
-                    if (unit(cell(i, j).id).type == Dead and adjacent_to_me(i, j, Alive, id)) cerr << "keloke" << i << ' ' << j << endl;;
-                    dist[i][j] = 0;
-                    Enemies.push(P(i, j));
-                }
-        int FOOD_RANGE = 20;
-        int ZOMBIE_RANGE = 15;
-        int ENEMY_RANGE = 2;
+		    for (int k = 0; k < 4; ++k) {
+			if (k == me()) continue;
+			if (Alive.size() < 30 + alive_units(k).size()) passive = true;
+			else { passive = false; break; }
+		    }
+		    if (not passive) {
+			int id = -1;
+			if (unit(cell(i, j).id).type == Dead and adjacent_to_me(i, j, Alive, id)) {
+			    int x = unit(id).pos.i;
+			    int y = unit(id).pos.j;
+			    if (adjacent_to_anyone(x, y)) {
+				cerr << "siuu " << x << ' ' << y << endl;
+				continue;
+			    }
+			}
+			dist[i][j] = 0;
+			Enemies.push(P(i, j));
+		    }
+		    else {
+			dist[i][j] = 99;
+			Enemies.push(P(i, j));
+		    }
+		}
+	int FOOD_RANGE = 20;
+	int ZOMBIE_RANGE = 15;
+	int ENEMY_RANGE = 2;
 
-        bfs(dist, Food, FOOD_RANGE);
-        bfs(dist, Zombies, ZOMBIE_RANGE);
-        bfs(dist, Enemies, ENEMY_RANGE);
-        kill_zombies(dia_dist, Zombies, ZOMBIE_RANGE);
+	cerr << boolalpha << "passive: " << passive << endl;
+	bfs(dist, Food, FOOD_RANGE);
+	bfs(dist, Zombies, ZOMBIE_RANGE);
+	bfs(dist, Enemies, ENEMY_RANGE);
+	kill_zombies(dia_dist, Zombies, ZOMBIE_RANGE);
 
-        for (int i = 0; i < 60; ++i) {
-          for (int j = 0; j < 60; ++j) cerr << setw(3) << dist[i][j];
-          cerr << endl;
-          }
-          cerr << string(50, '-') << endl;
+	for (int i = 0; i < 60; ++i) {
+	  for (int j = 0; j < 60; ++j) cerr << setw(3) << dist[i][j];
+	  cerr << endl;
+	  }
+	  cerr << string(50, '-') << endl;
+	  /*
 
-          for (int i = 0; i < 60; ++i) {
-          for (int j = 0; j < 60; ++j) cerr << setw(3) << dia_dist[i][j];
-          cerr << endl;
-          }
+	  for (int i = 0; i < 60; ++i) {
+	  for (int j = 0; j < 60; ++j) cerr << setw(3) << dia_dist[i][j];
+	  cerr << endl;
+	  }*/
 
-        for (int id : Alive) {
-            int i = unit(id).pos.i;
-            int j = unit(id).pos.j;
-            VI rand = random_permutation(4);
-            if (unit(id).rounds_for_zombie == -1 and dia_dist[i][j] <= 2 and dia_dist[i][j] != -1)
-                outplay_zombie(i, j, id, dist);
-            for (int k = 0; k < 4; ++k) {
-                Pos np = Pos(unit(id).pos) + dirs[rand[k]];
-                int ni = np.i;
-                int nj = np.j;
-                if (posok(ni, nj) and not is_ally(ni, nj)) {
-                    if (dist[ni][nj] < dist[i][j]) {
-                        cerr << "food unit at: " << i << ' ' << j << "move to: " << dirs[rand[k]] << endl;
-                        move(id, dirs[rand[k]]);
-                        break;
-                    }
-                }
-            }
-            nearest_cell(i, j);
-        }
+	for (int id : Alive) {
+	    int i = unit(id).pos.i;
+	    int j = unit(id).pos.j;
+	    VI rand = random_permutation(4);
+	    if (unit(id).rounds_for_zombie == -1 and dia_dist[i][j] <= 2 and dia_dist[i][j] != -1)
+		outplay_zombie(i, j, id, dist);
+	    for (int k = 0; k < 4; ++k) {
+		Pos np = Pos(unit(id).pos) + dirs[rand[k]];
+		int ni = np.i;
+		int nj = np.j;
+		if (posok(ni, nj) and not is_ally(ni, nj)) {
+		    if (dist[ni][nj] < dist[i][j]) {
+			cerr << "food unit at: " << i << ' ' << j << "move to: " << dirs[rand[k]] << endl;
+			move(id, dirs[rand[k]]);
+			break;
+		    }
+		}
+	    }
+	    nearest_cell(i, j);
+	}
     }
 };
 
